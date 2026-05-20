@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -8,9 +8,13 @@ import {
   ChevronRightIcon } from
 'lucide-react';
 import { useCart } from '../App';
+import { useStore } from '../context/StoreContext';
+import { computeCheckoutTotals } from '../lib/checkoutTotals';
+import { formatRp, parseRp } from '../lib/money';
+import type { PaymentMethodKey } from '../types/commerce';
+import { recordReferralOrderCommission } from '../lib/api';
 const PRIMARY = '#9E055F';
 const DARK = '#7a0449';
-type PaymentMethod = 'cod' | 'card' | 'jazzcash';
 interface ShippingForm {
   fullName: string;
   email: string;
@@ -19,12 +23,6 @@ interface ShippingForm {
   city: string;
   postalCode: string;
   country: string;
-}
-function parsePrice(price: string): number {
-  return parseFloat(price.replace(/[^0-9]/g, '')) || 0;
-}
-function formatPrice(amount: number): string {
-  return `Rp${amount.toLocaleString('id-ID')}`;
 }
 const inputClass =
 'w-full font-mono text-sm border-2 px-4 py-3 focus:outline-none transition-colors placeholder:text-white/30 rounded-lg text-white';
@@ -35,7 +33,15 @@ const inputStyle = {
 export function CheckoutPage() {
   const { cartItems, clearCart } = useCart();
   const navigate = useNavigate();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
+  const store = useStore();
+  const firstEnabledPayment = useMemo((): PaymentMethodKey => {
+    const order: PaymentMethodKey[] = ['cod', 'card', 'jazzcash'];
+    return (
+      order.find((k) => store.paymentEnabled[k]) ?? 'cod'
+    );
+  }, [store.paymentEnabled]);
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethodKey>('cod');
   const [errors, setErrors] = useState<Partial<ShippingForm>>({});
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<ShippingForm>({
@@ -47,10 +53,26 @@ export function CheckoutPage() {
     postalCode: '',
     country: 'Pakistan'
   });
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + parsePrice(item.price) * item.quantity,
+  useEffect(() => {
+    if (!store.paymentEnabled[paymentMethod]) {
+      setPaymentMethod(firstEnabledPayment);
+    }
+  }, [store.paymentEnabled, paymentMethod, firstEnabledPayment]);
+  const subtotalBeforePromoRp = cartItems.reduce(
+    (sum, item) => sum + parseRp(item.price) * item.quantity,
     0
   );
+  const totals = computeCheckoutTotals({
+    subtotalBeforePromoRp,
+    taxRatePercent: store.taxRatePercent,
+    shippingFlatRp: store.shippingFlatRp,
+    freeShippingOverRp: store.freeShippingOverRp,
+    promoPercent: store.promoPercent
+  });
+  const anyPaymentEnabled =
+    store.paymentEnabled.cod ||
+    store.paymentEnabled.card ||
+    store.paymentEnabled.jazzcash;
   const handleChange = (
   e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
   {
@@ -77,17 +99,45 @@ export function CheckoutPage() {
   const handlePlaceOrder = () => {
     if (!validate()) return;
     if (cartItems.length === 0) return;
+    if (!anyPaymentEnabled) return;
+    if (!store.paymentEnabled[paymentMethod]) return;
     setLoading(true);
     const orderId = `MSG-${Math.floor(100000 + Math.random() * 900000)}`;
     setTimeout(() => {
+      store.recordOrder({
+        id: orderId,
+        customerName: form.fullName,
+        customerEmail: form.email,
+        paymentMethod,
+        items: cartItems.map((item) => ({
+          productId: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceRp: parseRp(item.price),
+          lineTotalRp: parseRp(item.price) * item.quantity
+        })),
+        subtotalRp: totals.subtotalAfterPromoRp,
+        taxRp: totals.taxRp,
+        shippingRp: totals.shippingRp,
+        totalRp: totals.totalRp
+      });
+      recordReferralOrderCommission(
+        orderId,
+        form.email.trim(),
+        totals.totalRp
+      ).catch(() => {});
       clearCart();
       navigate('/order-confirmation', {
         state: {
           orderId,
-          total: subtotal,
+          total: totals.totalRp,
           paymentMethod,
           name: form.fullName,
-          email: form.email
+          email: form.email,
+          discountRp: totals.discountRp,
+          subtotalAfterPromoRp: totals.subtotalAfterPromoRp,
+          taxRp: totals.taxRp,
+          shippingRp: totals.shippingRp
         }
       });
     }, 1500);
@@ -368,154 +418,164 @@ export function CheckoutPage() {
                 PAYMENT METHOD
               </h2>
               <div className="space-y-3">
-                {/* COD */}
-                <button
-                  onClick={() => setPaymentMethod('cod')}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
-                  style={{
-                    borderColor:
-                    paymentMethod === 'cod' ?
-                    '#fff' :
-                    'rgba(255,255,255,0.2)',
-                    backgroundColor:
-                    paymentMethod === 'cod' ?
-                    'rgba(255,255,255,0.12)' :
-                    'rgba(255,255,255,0.05)'
-                  }}>
+                {store.paymentEnabled.cod &&
+                <>
+                    {/* COD */}
+                    <button
+                    onClick={() => setPaymentMethod('cod')}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
+                    style={{
+                      borderColor:
+                      paymentMethod === 'cod' ?
+                      '#fff' :
+                      'rgba(255,255,255,0.2)',
+                      backgroundColor:
+                      paymentMethod === 'cod' ?
+                      'rgba(255,255,255,0.12)' :
+                      'rgba(255,255,255,0.05)'
+                    }}>
 
-                  <TruckIcon className="w-6 h-6 text-white flex-shrink-0" />
-                  <div>
-                    <p className="font-mono text-sm text-white font-bold">
-                      Cash on Delivery (COD)
-                    </p>
-                    <p className="font-mono text-xs text-white/50">
-                      Pay when your order arrives
-                    </p>
-                  </div>
-                  <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
-                    {paymentMethod === 'cod' &&
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                    }
-                  </div>
-                </button>
-
-                {/* Card */}
-                <button
-                  onClick={() => setPaymentMethod('card')}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
-                  style={{
-                    borderColor:
-                    paymentMethod === 'card' ?
-                    '#fff' :
-                    'rgba(255,255,255,0.2)',
-                    backgroundColor:
-                    paymentMethod === 'card' ?
-                    'rgba(255,255,255,0.12)' :
-                    'rgba(255,255,255,0.05)'
-                  }}>
-
-                  <CreditCardIcon className="w-6 h-6 text-white flex-shrink-0" />
-                  <div>
-                    <p className="font-mono text-sm text-white font-bold">
-                      Card Payment (Stripe)
-                    </p>
-                    <p className="font-mono text-xs text-white/50">
-                      Visa, Mastercard, Amex
-                    </p>
-                  </div>
-                  <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
-                    {paymentMethod === 'card' &&
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                    }
-                  </div>
-                </button>
-                {paymentMethod === 'card' &&
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    height: 0
-                  }}
-                  animate={{
-                    opacity: 1,
-                    height: 'auto'
-                  }}
-                  className="grid grid-cols-2 gap-3 px-2">
-
-                    <div className="col-span-2">
-                      <input
-                      type="text"
-                      placeholder="CARD NUMBER"
-                      className={inputClass}
-                      style={inputStyle}
-                      maxLength={19} />
-
-                    </div>
-                    <input
-                    type="text"
-                    placeholder="MM/YY"
-                    className={inputClass}
-                    style={inputStyle}
-                    maxLength={5} />
-
-                    <input
-                    type="text"
-                    placeholder="CVV"
-                    className={inputClass}
-                    style={inputStyle}
-                    maxLength={4} />
-
-                  </motion.div>
+                      <TruckIcon className="w-6 h-6 text-white flex-shrink-0" />
+                      <div>
+                        <p className="font-mono text-sm text-white font-bold">
+                          Cash on Delivery (COD)
+                        </p>
+                        <p className="font-mono text-xs text-white/50">
+                          Pay when your order arrives
+                        </p>
+                      </div>
+                      <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
+                        {paymentMethod === 'cod' &&
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                      }
+                      </div>
+                    </button>
+                  </>
                 }
 
-                {/* JazzCash */}
-                <button
-                  onClick={() => setPaymentMethod('jazzcash')}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
-                  style={{
-                    borderColor:
-                    paymentMethod === 'jazzcash' ?
-                    '#fff' :
-                    'rgba(255,255,255,0.2)',
-                    backgroundColor:
-                    paymentMethod === 'jazzcash' ?
-                    'rgba(255,255,255,0.12)' :
-                    'rgba(255,255,255,0.05)'
-                  }}>
+                {store.paymentEnabled.card &&
+                <>
+                    <button
+                    onClick={() => setPaymentMethod('card')}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
+                    style={{
+                      borderColor:
+                      paymentMethod === 'card' ?
+                      '#fff' :
+                      'rgba(255,255,255,0.2)',
+                      backgroundColor:
+                      paymentMethod === 'card' ?
+                      'rgba(255,255,255,0.12)' :
+                      'rgba(255,255,255,0.05)'
+                    }}>
 
-                  <SmartphoneIcon className="w-6 h-6 text-white flex-shrink-0" />
-                  <div>
-                    <p className="font-mono text-sm text-white font-bold">
-                      JazzCash / EasyPaisa
-                    </p>
-                    <p className="font-mono text-xs text-white/50">
-                      Mobile wallet payment
-                    </p>
-                  </div>
-                  <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
+                      <CreditCardIcon className="w-6 h-6 text-white flex-shrink-0" />
+                      <div>
+                        <p className="font-mono text-sm text-white font-bold">
+                          Card Payment (Stripe)
+                        </p>
+                        <p className="font-mono text-xs text-white/50">
+                          Visa, Mastercard, Amex
+                        </p>
+                      </div>
+                      <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
+                        {paymentMethod === 'card' &&
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                      }
+                      </div>
+                    </button>
+                    {paymentMethod === 'card' &&
+                  <motion.div
+                    initial={{
+                      opacity: 0,
+                      height: 0
+                    }}
+                    animate={{
+                      opacity: 1,
+                      height: 'auto'
+                    }}
+                    className="grid grid-cols-2 gap-3 px-2">
+
+                        <div className="col-span-2">
+                          <input
+                        type="text"
+                        placeholder="CARD NUMBER"
+                        className={inputClass}
+                        style={inputStyle}
+                        maxLength={19} />
+
+                        </div>
+                        <input
+                      type="text"
+                      placeholder="MM/YY"
+                      className={inputClass}
+                      style={inputStyle}
+                      maxLength={5} />
+
+                        <input
+                      type="text"
+                      placeholder="CVV"
+                      className={inputClass}
+                      style={inputStyle}
+                      maxLength={4} />
+
+                      </motion.div>
+                  }
+                  </>
+                }
+
+                {store.paymentEnabled.jazzcash &&
+                <>
+                    <button
+                    onClick={() => setPaymentMethod('jazzcash')}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors text-left"
+                    style={{
+                      borderColor:
+                      paymentMethod === 'jazzcash' ?
+                      '#fff' :
+                      'rgba(255,255,255,0.2)',
+                      backgroundColor:
+                      paymentMethod === 'jazzcash' ?
+                      'rgba(255,255,255,0.12)' :
+                      'rgba(255,255,255,0.05)'
+                    }}>
+
+                      <SmartphoneIcon className="w-6 h-6 text-white flex-shrink-0" />
+                      <div>
+                        <p className="font-mono text-sm text-white font-bold">
+                          JazzCash / EasyPaisa
+                        </p>
+                        <p className="font-mono text-xs text-white/50">
+                          Mobile wallet payment
+                        </p>
+                      </div>
+                      <div className="ml-auto w-4 h-4 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0">
+                        {paymentMethod === 'jazzcash' &&
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                      }
+                      </div>
+                    </button>
                     {paymentMethod === 'jazzcash' &&
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                    }
-                  </div>
-                </button>
-                {paymentMethod === 'jazzcash' &&
-                <motion.div
-                  initial={{
-                    opacity: 0,
-                    height: 0
-                  }}
-                  animate={{
-                    opacity: 1,
-                    height: 'auto'
-                  }}
-                  className="px-2">
+                  <motion.div
+                    initial={{
+                      opacity: 0,
+                      height: 0
+                    }}
+                    animate={{
+                      opacity: 1,
+                      height: 'auto'
+                    }}
+                    className="px-2">
 
-                    <input
-                    type="tel"
-                    placeholder="MOBILE NUMBER (03XX XXXXXXX)"
-                    className={inputClass}
-                    style={inputStyle} />
+                        <input
+                      type="tel"
+                      placeholder="MOBILE NUMBER (03XX XXXXXXX)"
+                      className={inputClass}
+                      style={inputStyle} />
 
-                  </motion.div>
+                      </motion.div>
+                  }
+                  </>
                 }
               </div>
             </motion.div>
@@ -561,7 +621,7 @@ export function CheckoutPage() {
                       </p>
                     </div>
                     <p className="font-mono text-xs text-white flex-shrink-0">
-                      {formatPrice(parsePrice(item.price) * item.quantity)}
+                      {formatRp(parseRp(item.price) * item.quantity)}
                     </p>
                   </div>
                 )}
@@ -573,15 +633,35 @@ export function CheckoutPage() {
                     Subtotal
                   </span>
                   <span className="font-mono text-sm text-white">
-                    {formatPrice(subtotal)}
+                    {formatRp(subtotalBeforePromoRp)}
                   </span>
                 </div>
+                {totals.discountRp > 0 &&
+                <div className="flex justify-between">
+                    <span className="font-mono text-sm text-white/60">
+                      Promo ({store.promoPercent}%)
+                    </span>
+                    <span className="font-mono text-sm text-green-400">
+                      −{formatRp(totals.discountRp)}
+                    </span>
+                  </div>
+                }
                 <div className="flex justify-between">
                   <span className="font-mono text-sm text-white/60">
                     Shipping
                   </span>
-                  <span className="font-mono text-sm text-green-400 font-bold">
-                    FREE
+                  <span
+                  className={`font-mono text-sm font-bold ${totals.shippingRp === 0 ? 'text-green-400' : 'text-white'}`}>
+
+                    {totals.shippingRp === 0 ? 'FREE' : formatRp(totals.shippingRp)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-mono text-sm text-white/60">
+                    Tax ({store.taxRatePercent}%)
+                  </span>
+                  <span className="font-mono text-sm text-white">
+                    {formatRp(totals.taxRp)}
                   </span>
                 </div>
                 <div className="border-t border-white/10 pt-2 flex justify-between">
@@ -589,14 +669,19 @@ export function CheckoutPage() {
                     TOTAL
                   </span>
                   <span className="font-anton text-2xl text-white">
-                    {formatPrice(subtotal)}
+                    {formatRp(totals.totalRp)}
                   </span>
                 </div>
               </div>
 
+              {!anyPaymentEnabled &&
+              <p className="font-mono text-xs text-amber-300 mb-3 text-center uppercase tracking-widest">
+                  Checkout is unavailable — payment options are not enabled yet.
+                </p>
+              }
               <motion.button
                 onClick={handlePlaceOrder}
-                disabled={loading}
+                disabled={loading || !anyPaymentEnabled}
                 whileTap={{
                   scale: 0.99
                 }}

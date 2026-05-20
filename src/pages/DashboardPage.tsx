@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -16,95 +16,112 @@ import {
   GiftIcon } from
 'lucide-react';
 import { useAuth, useCart } from '../App';
+import { useStore } from '../context/StoreContext';
+import { formatRp } from '../lib/money';
+import { DEFAULT_PRODUCT_IMAGE } from '../lib/catalogDisplay';
+import { fetchReferralStats, type ReferralStats } from '../lib/api';
+import { getStoredToken } from '../lib/authStorage';
+import { OrganizationPanel } from '../components/dashboard/OrganizationPanel';
+
 const PRIMARY = '#9E055F';
 const DARK = '#7a0449';
-const RECENT_ORDERS = [
-{
-  id: '#ORD-001',
-  name: 'Rose Hip Face Oil',
-  date: 'Mar 1, 2026',
-  status: 'Delivered',
-  price: 'Rp89.000',
-  image: "/original-4006ba5de374258f3b7a9bf72a711ce4.webp"
-
-},
-{
-  id: '#ORD-002',
-  name: 'Vitamin C Serum',
-  date: 'Feb 28, 2026',
-  status: 'Processing',
-  price: 'Rp125.000',
-  image:
-  'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=100&q=80'
-},
-{
-  id: '#ORD-003',
-  name: 'Argan Hair Oil',
-  date: 'Feb 25, 2026',
-  status: 'Delivered',
-  price: 'Rp99.000',
-  image:
-  'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=100&q=80'
-}];
-
-const SOLD_ITEMS = [
-{
-  name: 'Jojoba Face Oil',
-  sold: 42,
-  revenue: 'Rp5.040.000',
-  image:
-  'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=100&q=80'
-},
-{
-  name: 'Glow Serum Kit',
-  sold: 28,
-  revenue: 'Rp3.360.000',
-  image:
-  'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=100&q=80'
-},
-{
-  name: 'Body Glow Oil',
-  sold: 19,
-  revenue: 'Rp1.425.000',
-  image:
-  'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=100&q=80'
-}];
-
-const ANALYTICS = [
-{
-  label: 'Products Bought',
-  value: '12',
-  icon: ShoppingBagIcon,
-  change: '+3 this month'
-},
-{
-  label: 'Products Sold',
-  value: '89',
-  icon: PackageIcon,
-  change: '+12 this month'
-},
-{
-  label: 'Total Profit',
-  value: 'Rp9.8M',
-  icon: DollarSignIcon,
-  change: '+Rp1.2M this month'
-},
-{
-  label: 'Avg. Rating',
-  value: '4.9★',
-  icon: StarIcon,
-  change: 'Top Seller Badge'
-}];
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
   const { cartItems } = useCart();
+  const { orders, products, analytics } = useStore();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<
-    'overview' | 'orders' | 'selling' | 'cart'>(
+    'overview' | 'organization' | 'orders' | 'selling' | 'cart'>(
     'overview');
   const [copied, setCopied] = useState(false);
-  const referralLink = `https://msglobal.com/ref/${user?.name?.toLowerCase().replace(/\s+/g, '') ?? 'user'}`;
+  const [referralStats, setReferralStats] = useState<ReferralStats | null>(
+    null
+  );
+  const [referralLoading, setReferralLoading] = useState(true);
+
+  useEffect(() => {
+    const token = getStoredToken();
+    if (!token || !user) {
+      setReferralStats(null);
+      setReferralLoading(false);
+      return;
+    }
+    setReferralLoading(true);
+    fetchReferralStats(token)
+      .then(setReferralStats)
+      .catch(() => setReferralStats(null))
+      .finally(() => setReferralLoading(false));
+  }, [user?.id]);
+
+  const myOrders = useMemo(() => {
+    if (!user?.email) return [];
+    const email = user.email.toLowerCase();
+    return orders.filter((o) => o.customerEmail.toLowerCase() === email);
+  }, [orders, user?.email]);
+
+  const overviewStats = useMemo(() => {
+    const itemsBought = myOrders.reduce(
+      (n, o) => n + o.items.reduce((s, l) => s + l.quantity, 0),
+      0
+    );
+    const totalSpent = myOrders.reduce((s, o) => s + o.totalRp, 0);
+    const unitsSold = Object.values(analytics.unitsSoldByProductId).reduce(
+      (a, b) => a + b,
+      0
+    );
+    return [
+      {
+        label: 'Products Bought',
+        value: String(itemsBought),
+        icon: ShoppingBagIcon,
+        change: `${myOrders.length} orders`
+      },
+      {
+        label: 'Units Sold (store)',
+        value: String(unitsSold),
+        icon: PackageIcon,
+        change: `${analytics.orderCount} store orders`
+      },
+      {
+        label: 'Total Spent',
+        value: formatRp(totalSpent),
+        icon: DollarSignIcon,
+        change: formatRp(analytics.last30DaysRevenueRp) + ' (30d store)'
+      },
+      {
+        label: 'Cart Items',
+        value: String(cartItems.length),
+        icon: StarIcon,
+        change: cartItems.length > 0 ? 'Ready to checkout' : 'Cart empty'
+      }
+    ];
+  }, [myOrders, analytics, cartItems.length]);
+
+  const soldItems = useMemo(() => {
+    return [...products]
+      .map((p) => {
+        const sold = analytics.unitsSoldByProductId[p.id] ?? 0;
+        return {
+          name: p.name,
+          sold,
+          revenue: formatRp(sold * p.priceRp),
+          image: p.image?.trim() || DEFAULT_PRODUCT_IMAGE
+        };
+      })
+      .filter((x) => x.sold > 0)
+      .sort((a, b) => b.sold - a.sold);
+  }, [products, analytics.unitsSoldByProductId]);
+
+  const referralLink = useMemo(() => {
+    if (!referralStats?.referralCode) return '';
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/join?ref=${referralStats.referralCode}`;
+  }, [referralStats?.referralCode]);
+
+  const commissionRate =
+    referralStats?.commissionRatePercent ?? 10;
   const handleCopyLink = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});
     setCopied(true);
@@ -198,6 +215,10 @@ export function DashboardPage() {
             label: 'Overview'
           },
           {
+            key: 'organization',
+            label: 'Organization'
+          },
+          {
             key: 'orders',
             label: 'My Orders'
           },
@@ -243,7 +264,7 @@ export function DashboardPage() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              {ANALYTICS.map((stat, i) =>
+              {overviewStats.map((stat, i) =>
             <motion.div
               key={stat.label}
               initial={{
@@ -289,51 +310,16 @@ export function DashboardPage() {
                 <p className="font-anton text-lg text-white">SALES ANALYTICS</p>
                 <BarChart2Icon className="w-5 h-5 text-white/40" />
               </div>
-              <div className="flex items-end gap-2 h-32">
-                {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 100].map(
-                (h, i) =>
-                <motion.div
-                  key={i}
-                  initial={{
-                    height: 0
-                  }}
-                  animate={{
-                    height: `${h}%`
-                  }}
-                  transition={{
-                    delay: i * 0.05,
-                    duration: 0.5,
-                    ease: [0.22, 1, 0.36, 1]
-                  }}
-                  className="flex-1 rounded-t-sm"
-                  style={{
-                    backgroundColor:
-                    i === 11 ? '#FF0000' : 'rgba(255,255,255,0.25)'
-                  }} />
-
-
+              {myOrders.length === 0 ? (
+              <p className="font-mono text-xs text-white/40 py-8 text-center">
+                Place an order to see your spending history here.
+              </p>
+              ) : (
+              <p className="font-mono text-xs text-white/50">
+                {myOrders.length} order{myOrders.length === 1 ? '' : 's'} ·{' '}
+                {formatRp(myOrders.reduce((s, o) => s + o.totalRp, 0))} total
+              </p>
               )}
-              </div>
-              <div className="flex justify-between mt-2">
-                {[
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec'].
-              map((m) =>
-              <span key={m} className="font-mono text-xs text-white/30">
-                    {m}
-                  </span>
-              )}
-              </div>
             </div>
 
             {/* Quick Actions */}
@@ -395,14 +381,15 @@ export function DashboardPage() {
                     REFERRAL PROGRAM
                   </h3>
                   <p className="font-mono text-xs text-white/50">
-                    Earn 10% commission on every referral sale
+                    Earn {commissionRate}% commission on every referral sale
                   </p>
                 </div>
               </div>
 
               <p className="font-mono text-sm text-white/70 leading-relaxed mb-5">
-                Share your referral link and earn 10% commission on every sale
-                your referrals make. The more you share, the more you earn!
+                Share your referral link and earn {commissionRate}% commission
+                when referred members complete orders. Stats update from your live
+                account data.
               </p>
 
               {/* Referral Link */}
@@ -413,10 +400,13 @@ export function DashboardPage() {
                   backgroundColor: 'rgba(255,255,255,0.06)'
                 }}>
 
-                  {referralLink}
+                  {referralLoading
+                    ? 'Loading your link…'
+                    : referralLink || 'Sign in to generate your link'}
                 </div>
                 <motion.button
                 onClick={handleCopyLink}
+                disabled={!referralLink}
                 whileTap={{
                   scale: 0.97
                 }}
@@ -443,7 +433,11 @@ export function DashboardPage() {
                 }}>
 
                   <UsersIcon className="w-5 h-5 text-white/50 mx-auto mb-2" />
-                  <p className="font-anton text-2xl text-white">12</p>
+                  <p className="font-anton text-2xl text-white">
+                    {referralLoading
+                      ? '—'
+                      : referralStats?.totalReferrals ?? 0}
+                  </p>
                   <p className="font-mono text-xs text-white/50 uppercase tracking-widest mt-1">
                     Total Referrals
                   </p>
@@ -455,7 +449,11 @@ export function DashboardPage() {
                 }}>
 
                   <DollarSignIcon className="w-5 h-5 text-white/50 mx-auto mb-2" />
-                  <p className="font-anton text-2xl text-white">Rp450K</p>
+                  <p className="font-anton text-2xl text-white">
+                    {referralLoading
+                      ? '—'
+                      : formatRp(referralStats?.commissionEarnedRp ?? 0)}
+                  </p>
                   <p className="font-mono text-xs text-white/50 uppercase tracking-widest mt-1">
                     Commission Earned
                   </p>
@@ -467,7 +465,11 @@ export function DashboardPage() {
                 }}>
 
                   <GiftIcon className="w-5 h-5 text-white/50 mx-auto mb-2" />
-                  <p className="font-anton text-2xl text-white">Rp120K</p>
+                  <p className="font-anton text-2xl text-white">
+                    {referralLoading
+                      ? '—'
+                      : formatRp(referralStats?.pendingCommissionRp ?? 0)}
+                  </p>
                   <p className="font-mono text-xs text-white/50 uppercase tracking-widest mt-1">
                     Pending
                   </p>
@@ -476,6 +478,10 @@ export function DashboardPage() {
             </div>
           </motion.div>
         }
+
+        {activeSection === 'organization' && user && (
+          <OrganizationPanel userEmail={user.email} />
+        )}
 
         {/* ── ORDERS ── */}
         {activeSection === 'orders' &&
@@ -494,9 +500,28 @@ export function DashboardPage() {
 
             <p className="font-anton text-xl text-white mb-4">MY ORDERS</p>
             <div className="space-y-3">
-              {RECENT_ORDERS.map((order, i) =>
+              {myOrders.length === 0 ? (
+              <p className="font-mono text-xs text-white/40 py-8 text-center">
+                You have not placed any orders yet.
+              </p>
+              ) : (
+              myOrders.map((order, i) => {
+              const first = order.items[0];
+              const product = products.find((p) => p.id === first?.productId);
+              const image = product?.image?.trim() || DEFAULT_PRODUCT_IMAGE;
+              const name =
+                first?.name ??
+                (order.items.length > 1
+                  ? `${order.items.length} items`
+                  : 'Order');
+              const date = new Date(order.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              });
+              return (
             <motion.div
-              key={order.id}
+              key={order.id + i}
               initial={{
                 opacity: 0,
                 x: -20
@@ -514,38 +539,36 @@ export function DashboardPage() {
               }}>
 
                   <img
-                src={order.image}
-                alt={order.name}
+                src={image}
+                alt={name}
                 className="w-14 h-14 object-cover rounded-lg flex-shrink-0" />
 
                   <div className="flex-1 min-w-0">
                     <p className="font-mono text-xs text-white font-bold truncate">
-                      {order.name}
+                      {name}
                     </p>
                     <p className="font-mono text-xs text-white/50">
-                      {order.id} · {order.date}
+                      {order.id} · {date}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="font-mono text-sm font-bold text-white">
-                      {order.price}
+                      {formatRp(order.totalRp)}
                     </p>
                     <span
                   className="font-mono text-xs px-2 py-0.5 rounded-full"
                   style={{
-                    backgroundColor:
-                    order.status === 'Delivered' ?
-                    'rgba(34,197,94,0.2)' :
-                    'rgba(251,191,36,0.2)',
-                    color:
-                    order.status === 'Delivered' ? '#4ade80' : '#fbbf24'
+                    backgroundColor: 'rgba(34,197,94,0.2)',
+                    color: '#4ade80'
                   }}>
 
-                      {order.status}
+                      Confirmed
                     </span>
                   </div>
                 </motion.div>
-            )}
+              );
+              })
+              )}
             </div>
           </motion.div>
         }
@@ -574,11 +597,18 @@ export function DashboardPage() {
               }}>
 
                 <p className="font-mono text-xs text-white/50">Total Revenue</p>
-                <p className="font-anton text-lg text-white">Rp9.825.000</p>
+                <p className="font-anton text-lg text-white">
+                  {formatRp(analytics.totalRevenueRp)}
+                </p>
               </div>
             </div>
             <div className="space-y-3">
-              {SOLD_ITEMS.map((item, i) =>
+              {soldItems.length === 0 ? (
+              <p className="font-mono text-xs text-white/40 py-8 text-center">
+                No sales recorded yet. Completed checkouts update these stats.
+              </p>
+              ) : (
+              soldItems.map((item, i) =>
             <motion.div
               key={item.name}
               initial={{
@@ -623,7 +653,8 @@ export function DashboardPage() {
                     {item.revenue}
                   </p>
                 </motion.div>
-            )}
+            )
+              )}
             </div>
           </motion.div>
         }

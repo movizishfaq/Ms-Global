@@ -1,8 +1,20 @@
-import React, { useEffect, useState, useRef, Children, Fragment } from 'react';
+import React, { useEffect, useState, useRef, Children, Fragment, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { Marquee } from '../components/Marquee';
 import { useCart } from '../App';
+import { StudioSelectBar } from '../components/studio/StudioSelectBar';
+import { useVisitorSite } from '../hooks/useVisitorSite';
+import { useStore } from '../context/StoreContext';
+import {
+  activeCatalogProducts,
+  catalogToHomeCard,
+  type HomeProductCard
+} from '../lib/catalogDisplay';
+import {
+  sortedVisibleHomeSections,
+  type HomeSectionId
+} from '../types/siteBuilder';
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,9 +33,6 @@ import {
 'lucide-react';
 import oip from './OIP.webp';
 const HERO_IMAGE  = oip;
-
-const PRIMARY = '#9E055F';
-const DARK = '#7a0449';
 const CATEGORIES = [
 {
   label: 'Face Oils',
@@ -58,590 +67,6 @@ const CATEGORIES = [
   icon: Grid
 }];
 
-const FLASH_PRODUCTS = [
-{
-  id: '1',
-  name: 'Rose Hip Face Oil',
-  price: 'Rp89.000',
-  original: 'Rp160.000',
-  rating: 4.9,
-  sold: '10k+',
-  progress: 90,
-  image: HERO_IMAGE
-},
-{
-  id: '2',
-  name: 'Vitamin C Serum',
-  price: 'Rp125.000',
-  original: 'Rp250.000',
-  rating: 4.8,
-  sold: '8k+',
-  progress: 75,
-  image:
-  'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-},
-{
-  id: '3',
-  name: 'Argan Hair Oil',
-  price: 'Rp99.000',
-  original: 'Rp199.000',
-  rating: 4.9,
-  sold: '12k+',
-  progress: 85,
-  image:
-  'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-},
-{
-  id: '4',
-  name: 'Body Glow Oil',
-  price: 'Rp75.000',
-  original: 'Rp150.000',
-  rating: 4.7,
-  sold: '5k+',
-  progress: 60,
-  image:
-  'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-},
-{
-  id: '5',
-  name: 'Niacinamide Toner',
-  price: 'Rp95.000',
-  original: 'Rp140.000',
-  rating: 4.9,
-  sold: '20k+',
-  progress: 95,
-  image:
-  'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-}];
-
-const TABS = [
-'Best Seller',
-'Keep Stylish',
-'Special Discount',
-'Official Store',
-'Coveted'];
-
-const ALL_TAB_PRODUCTS: Record<string, typeof FLASH_PRODUCTS> = {
-  'Best Seller': [
-  {
-    id: '10',
-    name: 'Jojoba Face Oil',
-    price: 'Rp120.000',
-    original: '',
-    rating: 4.9,
-    sold: '15k+',
-    progress: 0,
-    image: HERO_IMAGE
-  },
-  {
-    id: '11',
-    name: 'Retinol Night Serum',
-    price: 'Rp179.000',
-    original: '',
-    rating: 4.8,
-    sold: '9k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-  },
-  {
-    id: '12',
-    name: 'Niacinamide Toner',
-    price: 'Rp95.000',
-    original: 'Rp140.000',
-    rating: 4.9,
-    sold: '20k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-  },
-  {
-    id: '13',
-    name: 'Hyaluronic Moisturizer',
-    price: 'Rp145.000',
-    original: '',
-    rating: 4.8,
-    sold: '7k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-  },
-  {
-    id: '14',
-    name: 'Glow Facial Oil',
-    price: 'Rp110.000',
-    original: 'Rp200.000',
-    rating: 4.9,
-    sold: '11k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-  },
-  {
-    id: '15',
-    name: 'Tea Tree Spot Oil',
-    price: 'Rp85.000',
-    original: '',
-    rating: 4.7,
-    sold: '6k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
-  },
-  {
-    id: '16',
-    name: 'Luxury Body Oil',
-    price: 'Rp199.000',
-    original: 'Rp350.000',
-    rating: 4.9,
-    sold: '4k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
-  },
-  {
-    id: '17',
-    name: 'Brightening Serum',
-    price: 'Rp165.000',
-    original: '',
-    rating: 4.8,
-    sold: '8k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
-  }],
-
-  'Keep Stylish': [
-  {
-    id: '20',
-    name: 'Vitamin E Oil',
-    price: 'Rp89.000',
-    original: 'Rp130.000',
-    rating: 4.7,
-    sold: '6k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
-  },
-  {
-    id: '21',
-    name: 'Collagen Serum',
-    price: 'Rp210.000',
-    original: '',
-    rating: 4.9,
-    sold: '3k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
-  },
-  {
-    id: '22',
-    name: 'Aloe Vera Gel',
-    price: 'Rp55.000',
-    original: '',
-    rating: 4.6,
-    sold: '25k+',
-    progress: 0,
-    image: HERO_IMAGE
-  },
-  {
-    id: '23',
-    name: 'Peptide Eye Cream',
-    price: 'Rp175.000',
-    original: 'Rp220.000',
-    rating: 4.8,
-    sold: '5k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-  },
-  {
-    id: '24',
-    name: 'Squalane Oil',
-    price: 'Rp135.000',
-    original: '',
-    rating: 4.9,
-    sold: '7k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
-  },
-  {
-    id: '25',
-    name: 'Bakuchiol Serum',
-    price: 'Rp195.000',
-    original: 'Rp280.000',
-    rating: 4.8,
-    sold: '4k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-  },
-  {
-    id: '26',
-    name: 'Ceramide Cream',
-    price: 'Rp160.000',
-    original: '',
-    rating: 4.7,
-    sold: '9k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-  },
-  {
-    id: '27',
-    name: 'AHA BHA Toner',
-    price: 'Rp115.000',
-    original: 'Rp160.000',
-    rating: 4.8,
-    sold: '11k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-  }],
-
-  'Special Discount': [
-  {
-    id: '30',
-    name: 'Marula Face Oil',
-    price: 'Rp79.000',
-    original: 'Rp199.000',
-    rating: 4.9,
-    sold: '8k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
-  },
-  {
-    id: '31',
-    name: 'Glycolic Serum',
-    price: 'Rp99.000',
-    original: 'Rp220.000',
-    rating: 4.7,
-    sold: '5k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
-  },
-  {
-    id: '32',
-    name: 'Snail Mucin Essence',
-    price: 'Rp85.000',
-    original: 'Rp170.000',
-    rating: 4.8,
-    sold: '13k+',
-    progress: 0,
-    image: HERO_IMAGE
-  },
-  {
-    id: '33',
-    name: 'Tranexamic Acid',
-    price: 'Rp110.000',
-    original: 'Rp230.000',
-    rating: 4.9,
-    sold: '6k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
-  },
-  {
-    id: '34',
-    name: 'Centella Toner',
-    price: 'Rp65.000',
-    original: 'Rp120.000',
-    rating: 4.7,
-    sold: '18k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-  },
-  {
-    id: '35',
-    name: 'Lactic Acid Serum',
-    price: 'Rp130.000',
-    original: 'Rp260.000',
-    rating: 4.8,
-    sold: '7k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-  },
-  {
-    id: '36',
-    name: 'Propolis Ampoule',
-    price: 'Rp145.000',
-    original: 'Rp290.000',
-    rating: 4.9,
-    sold: '4k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-  },
-  {
-    id: '37',
-    name: 'Azelaic Acid Cream',
-    price: 'Rp120.000',
-    original: 'Rp240.000',
-    rating: 4.8,
-    sold: '5k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-  }],
-
-  'Official Store': [
-  {
-    id: '40',
-    name: 'The Ordinary Serum',
-    price: 'Rp189.000',
-    original: '',
-    rating: 4.9,
-    sold: '30k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
-  },
-  {
-    id: '41',
-    name: 'Skintific Oil',
-    price: 'Rp145.000',
-    original: '',
-    rating: 4.8,
-    sold: '22k+',
-    progress: 0,
-    image: HERO_IMAGE
-  },
-  {
-    id: '42',
-    name: 'Somethinc Toner',
-    price: 'Rp99.000',
-    original: '',
-    rating: 4.9,
-    sold: '18k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
-  },
-  {
-    id: '43',
-    name: 'Avoskin Serum',
-    price: 'Rp175.000',
-    original: '',
-    rating: 4.7,
-    sold: '9k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-  },
-  {
-    id: '44',
-    name: 'Wardah Oil',
-    price: 'Rp89.000',
-    original: '',
-    rating: 4.8,
-    sold: '35k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
-  },
-  {
-    id: '45',
-    name: 'Emina Moisturizer',
-    price: 'Rp65.000',
-    original: '',
-    rating: 4.6,
-    sold: '40k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-  },
-  {
-    id: '46',
-    name: 'Scarlett Serum',
-    price: 'Rp135.000',
-    original: '',
-    rating: 4.9,
-    sold: '28k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-  },
-  {
-    id: '47',
-    name: 'MS Glow Oil',
-    price: 'Rp199.000',
-    original: '',
-    rating: 4.8,
-    sold: '15k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-  }],
-
-  Coveted: [
-  {
-    id: '50',
-    name: 'La Mer Oil',
-    price: 'Rp850.000',
-    original: 'Rp1.200.000',
-    rating: 5.0,
-    sold: '1k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
-  },
-  {
-    id: '51',
-    name: 'SK-II Essence',
-    price: 'Rp650.000',
-    original: '',
-    rating: 4.9,
-    sold: '2k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
-  },
-  {
-    id: '52',
-    name: 'Tatcha Serum',
-    price: 'Rp480.000',
-    original: 'Rp600.000',
-    rating: 4.9,
-    sold: '800+',
-    progress: 0,
-    image: HERO_IMAGE
-  },
-  {
-    id: '53',
-    name: 'Sulwhasoo Oil',
-    price: 'Rp520.000',
-    original: '',
-    rating: 4.8,
-    sold: '1.5k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80'
-  },
-  {
-    id: '54',
-    name: 'Drunk Elephant Serum',
-    price: 'Rp390.000',
-    original: 'Rp490.000',
-    rating: 4.9,
-    sold: '3k+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
-  },
-  {
-    id: '55',
-    name: 'Sisley Oil',
-    price: 'Rp720.000',
-    original: '',
-    rating: 5.0,
-    sold: '500+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80'
-  },
-  {
-    id: '56',
-    name: 'Clé de Peau Serum',
-    price: 'Rp980.000',
-    original: 'Rp1.100.000',
-    rating: 5.0,
-    sold: '300+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80'
-  },
-  {
-    id: '57',
-    name: 'Augustinus Bader',
-    price: 'Rp1.200.000',
-    original: '',
-    rating: 4.9,
-    sold: '200+',
-    progress: 0,
-    image:
-    'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=400&q=80'
-  }]
-
-};
-const STORES = [
-{
-  name: 'GlowLab Mall',
-  tagline: '"Glow From Within"',
-  products: [
-  {
-    price: 'Rp89.000',
-    img: HERO_IMAGE
-  },
-  {
-    price: 'Rp125.000',
-    img: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=200&q=80'
-  },
-  {
-    price: 'Rp99.000',
-    img: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=200&q=80'
-  }]
-
-},
-{
-  name: 'Radiance Hub',
-  tagline: '"Unleash Your Glow"',
-  products: [
-  {
-    price: 'Rp145.000',
-    img: 'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=200&q=80'
-  },
-  {
-    price: 'Rp75.000',
-    img: 'https://images.unsplash.com/photo-1631390519301-88d9f0f5e8b5?w=200&q=80'
-  },
-  {
-    price: 'Rp199.000',
-    img: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=200&q=80'
-  }]
-
-},
-{
-  name: 'Skin Luxe',
-  tagline: '"Be Extraordinary"',
-  products: [
-  {
-    price: 'Rp179.000',
-    img: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=200&q=80'
-  },
-  {
-    price: 'Rp95.000',
-    img: 'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=200&q=80'
-  },
-  {
-    price: 'Rp165.000',
-    img: HERO_IMAGE
-  }]
-
-},
-{
-  name: 'Aurora Beauty',
-  tagline: '"Chic, Bold, Confident"',
-  products: [
-  {
-    price: 'Rp110.000',
-    img: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=200&q=80'
-  },
-  {
-    price: 'Rp85.000',
-    img: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=200&q=80'
-  },
-  {
-    price: 'Rp255.000',
-    img: 'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=200&q=80'
-  }]
-
-}];
-
 // ─── Review Types ─────────────────────────────────────────────────────────────
 interface Review {
   id: string;
@@ -650,32 +75,6 @@ interface Review {
   comment: string;
   time: string;
 }
-const INITIAL_REVIEWS: Review[] = [
-{
-  id: 'r1',
-  name: 'Ayesha K.',
-  rating: 5,
-  comment:
-  'Amazing products! The Rose Hip Oil transformed my skin in just 2 weeks. Highly recommend!',
-  time: '2 days ago'
-},
-{
-  id: 'r2',
-  name: 'Fatima R.',
-  rating: 5,
-  comment:
-  'Fast delivery and great quality. Will definitely order again from MS Global!',
-  time: '5 days ago'
-},
-{
-  id: 'r3',
-  name: 'Sara M.',
-  rating: 4,
-  comment:
-  'Love the Vitamin C Serum. My skin glows every morning. Great value for money.',
-  time: '1 week ago'
-}];
-
 // ─── Star Rating ──────────────────────────────────────────────────────────────
 function StarRating({
   value,
@@ -714,7 +113,7 @@ function StarRating({
 }
 // ─── Reviews Section ──────────────────────────────────────────────────────────
 function ReviewsSection() {
-  const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [name, setName] = useState('');
   const [comment, setComment] = useState('');
   const [rating, setRating] = useState(5);
@@ -738,11 +137,12 @@ function ReviewsSection() {
   };
   return (
     <section
-      className="py-12 px-6 border-t border-white/10"
+      className="relative py-12 px-6 border-t border-white/10"
       style={{
-        backgroundColor: PRIMARY
+        backgroundColor: 'var(--primary)'
       }}>
 
+      <StudioSelectBar panel="sections" label="Reviews" block="reviews" />
       <div className="max-w-screen-xl mx-auto">
         <div className="text-center mb-10">
           <p className="font-mono text-xs text-white/50 uppercase tracking-[0.3em] mb-2">
@@ -843,6 +243,11 @@ function ReviewsSection() {
 
           {/* Reviews List */}
           <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+            {reviews.length === 0 ? (
+            <p className="font-mono text-xs text-white/40 text-center py-8 uppercase tracking-widest">
+              No reviews yet — be the first to share your experience.
+            </p>
+            ) : null}
             <AnimatePresence initial={false}>
               {reviews.map((review, i) =>
               <motion.div
@@ -904,7 +309,7 @@ function FlashProductCard({
   product
 
 
-}: {product: (typeof FLASH_PRODUCTS)[0];}) {
+}: {product: HomeProductCard}) {
   const [liked, setLiked] = useState(false);
   const { addToCart, cartItems } = useCart();
   const inCart = cartItems.some((i) => i.id === product.id);
@@ -934,32 +339,19 @@ function FlashProductCard({
         <p className="font-mono text-xs text-gray-800 leading-tight mb-1 truncate">
           {product.name}
         </p>
+        {product.sold ? (
         <div className="flex items-center gap-1 mb-1">
-          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-          <span className="font-mono text-xs text-gray-500">
-            {product.rating} · {product.sold} Sold
-          </span>
+          <span className="font-mono text-xs text-gray-500">{product.sold}</span>
         </div>
+        ) : null}
         <p className="font-mono text-sm font-bold text-gray-900">
           {product.price}
         </p>
-        {product.original &&
+        {product.original ? (
         <p className="font-mono text-xs text-red-500 line-through">
             {product.original}
           </p>
-        }
-        {product.progress > 0 &&
-        <div className="mt-1.5">
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-              className="h-full bg-red-500 rounded-full"
-              style={{
-                width: `${product.progress}%`
-              }} />
-
-            </div>
-          </div>
-        }
+        ) : null}
         <button
           onClick={() =>
           !inCart &&
@@ -973,7 +365,7 @@ function FlashProductCard({
           }
           className="mt-2 w-full font-mono text-xs py-1.5 rounded transition-colors font-bold"
           style={{
-            backgroundColor: inCart ? '#9E055F' : '#000',
+            backgroundColor: inCart ? 'var(--primary)' : '#000',
             color: '#fff'
           }}>
 
@@ -987,7 +379,7 @@ function TodayProductCard({
   product
 
 
-}: {product: (typeof FLASH_PRODUCTS)[0];}) {
+}: {product: HomeProductCard}) {
   const [liked, setLiked] = useState(false);
   const { addToCart, cartItems } = useCart();
   const inCart = cartItems.some((i) => i.id === product.id);
@@ -1033,12 +425,11 @@ function TodayProductCard({
         <p className="font-mono text-xs text-gray-800 leading-tight mb-1 line-clamp-2">
           {product.name}
         </p>
+        {product.sold ? (
         <div className="flex items-center gap-1 mb-1">
-          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-          <span className="font-mono text-xs text-gray-500">
-            {product.rating} · {product.sold} Sold
-          </span>
+          <span className="font-mono text-xs text-gray-500">{product.sold}</span>
         </div>
+        ) : null}
         <div className="flex items-baseline gap-1.5">
           <p className="font-mono text-sm font-bold text-gray-900">
             {product.price}
@@ -1062,7 +453,7 @@ function TodayProductCard({
           }
           className="mt-2 w-full font-mono text-xs py-1.5 rounded transition-colors font-bold"
           style={{
-            backgroundColor: inCart ? '#9E055F' : '#000',
+            backgroundColor: inCart ? 'var(--primary)' : '#000',
             color: '#fff'
           }}>
 
@@ -1074,10 +465,55 @@ function TodayProductCard({
 }
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function HomePage() {
-  const [activeTab, setActiveTab] = useState('Best Seller');
+  const { products, analytics } = useStore();
+  const catalog = useMemo(
+    () => activeCatalogProducts(products),
+    [products]
+  );
+  const homeCards = useMemo(
+    () =>
+      catalog.map((p) =>
+        catalogToHomeCard(p, analytics.unitsSoldByProductId[p.id] ?? 0)
+      ),
+    [catalog, analytics.unitsSoldByProductId]
+  );
+  const flashProducts = useMemo(() => homeCards.slice(0, 8), [homeCards]);
+  const categoryTabs = useMemo(() => {
+    const cats = [...new Set(catalog.map((p) => p.category))].sort();
+    return cats.length > 0 ? ['ALL', ...cats] : ['ALL'];
+  }, [catalog]);
+  const productsByTab = useMemo(() => {
+    const map: Record<string, HomeProductCard[]> = {};
+    for (const tab of categoryTabs) {
+      if (tab === 'ALL') {
+        map[tab] = homeCards;
+      } else {
+        map[tab] = homeCards.filter(
+          (c) => catalog.find((p) => p.id === c.id)?.category === tab
+        );
+      }
+    }
+    return map;
+  }, [categoryTabs, homeCards, catalog]);
+  const storeShowcase = useMemo(() => {
+    const chunks: { price: string; img: string }[][] = [];
+    for (let i = 0; i < homeCards.length; i += 3) {
+      chunks.push(
+        homeCards.slice(i, i + 3).map((p) => ({
+          price: p.price,
+          img: p.image
+        }))
+      );
+    }
+    return chunks.slice(0, 4);
+  }, [homeCards]);
+  const [activeTab, setActiveTab] = useState('');
   const [heroDot, setHeroDot] = useState(0);
   const flashScrollRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!activeTab && categoryTabs[0]) setActiveTab(categoryTabs[0]);
+  }, [activeTab, categoryTabs]);
   const scrollFlash = (dir: 'left' | 'right') => {
     if (flashScrollRef.current) {
       flashScrollRef.current.scrollBy({
@@ -1086,22 +522,39 @@ export function HomePage() {
       });
     }
   };
+  const site = useVisitorSite();
+  const homeOrder = useMemo(
+    () => sortedVisibleHomeSections(site.home.sections),
+    [site.home.sections]
+  );
+  const show = (id: HomeSectionId) => homeOrder.includes(id);
+  const heroImg =
+    site.home.hero.heroImageUrl?.trim().length > 0
+      ? site.home.hero.heroImageUrl
+      : HERO_IMAGE;
+  const heroBg = `radial-gradient(ellipse at 70% 50%, ${site.theme.primary} 0%, ${site.theme.dark} 100%)`;
+  const hCopy = site.home.hero;
   return (
     <div
       className="w-full"
       style={{
-        backgroundColor: PRIMARY
+        backgroundColor: 'var(--primary)'
       }}>
 
-      <Marquee />
+      {show('marquee') && (
+      <Marquee
+        text={site.marquee.text}
+        durationSeconds={site.marquee.durationSeconds} />
 
-      {/* ── HERO ── */}
+      )}
+      {show('hero') && (
       <section
         className="relative overflow-hidden"
         style={{
-          background: `radial-gradient(ellipse at 70% 50%, #c4076e 0%, #9E055F 40%, #7a0449 100%)`
+          background: heroBg
         }}>
 
+        <StudioSelectBar panel="home-editor" label="Hero" block="hero" />
         <div
           className="absolute inset-0 pointer-events-none"
           aria-hidden="true">
@@ -1122,7 +575,7 @@ export function HomePage() {
             className="absolute top-1/4 right-1/4 w-48 h-48 rounded-full opacity-10"
             style={{
               background:
-              'radial-gradient(circle, #FF0000 0%, transparent 70%)'
+              'radial-gradient(circle, var(--red) 0%, transparent 70%)'
             }} />
 
         </div>
@@ -1143,7 +596,7 @@ export function HomePage() {
               }}
               className="font-mono text-xs text-white/60 uppercase tracking-[0.3em] mb-4">
 
-              #Big Beauty Sale
+              {hCopy.eyebrow}
             </motion.p>
             <motion.h1
               initial={{
@@ -1161,17 +614,17 @@ export function HomePage() {
               }}
               className="font-anton text-6xl md:text-8xl text-white leading-none uppercase mb-4">
 
-              LET'S GLOW
+              {hCopy.line1}
               <br />
               <span
                 style={{
-                  color: '#FF0000'
+                  color: 'var(--red)'
                 }}>
 
-                BEYOND
+                {hCopy.line2Accent}
               </span>
               <br />
-              BOUNDARIES
+              {hCopy.line3}
             </motion.h1>
             <motion.p
               initial={{
@@ -1187,8 +640,7 @@ export function HomePage() {
               }}
               className="font-mono text-sm text-white/70 mb-8 max-w-sm leading-relaxed">
 
-              Premium Ladies Oil & Beauty Products — crafted for your glow
-              journey.
+              {hCopy.sub}
             </motion.p>
             <motion.div
               initial={{
@@ -1205,19 +657,19 @@ export function HomePage() {
               className="flex gap-3 flex-wrap">
 
               <Link
-                to="/shop"
+                to={hCopy.primaryCtaHref || '/shop'}
                 className="font-mono text-sm uppercase tracking-widest text-white px-8 py-3 font-bold transition-colors"
                 style={{
-                  backgroundColor: '#FF0000'
+                  backgroundColor: 'var(--red)'
                 }}>
 
-                SHOP NOW
+                {hCopy.primaryCtaLabel}
               </Link>
               <Link
-                to="/join"
+                to={hCopy.secondaryCtaHref || '/join'}
                 className="font-mono text-sm uppercase tracking-widest text-white px-8 py-3 font-bold border-2 border-white/40 hover:border-white transition-colors">
 
-                JOIN US
+                {hCopy.secondaryCtaLabel}
               </Link>
             </motion.div>
             <div className="flex gap-2 mt-8">
@@ -1281,7 +733,7 @@ export function HomePage() {
               className="relative z-10">
 
               <img
-                src={HERO_IMAGE}
+                src={heroImg}
                 alt="Ladies Oil Product"
                 className="w-56 h-56 md:w-80 md:h-80 object-cover rounded-full shadow-2xl border-4 border-white/20"
                 style={{
@@ -1300,14 +752,16 @@ export function HomePage() {
               }}
               className="absolute top-4 right-4 md:right-0 bg-white rounded-xl px-3 py-2 shadow-lg z-20">
 
-              <p className="font-mono text-xs text-gray-500">Best Seller</p>
+              <p className="font-mono text-xs text-gray-500">
+                {hCopy.floatingBadgeTitle}
+              </p>
               <p
                 className="font-anton text-lg"
                 style={{
-                  color: PRIMARY
+                  color: 'var(--primary)'
                 }}>
 
-                50% OFF
+                {hCopy.floatingBadgePromo}
               </p>
             </motion.div>
             <motion.div
@@ -1322,22 +776,26 @@ export function HomePage() {
               }}
               className="absolute bottom-8 left-0 md:-left-4 bg-white rounded-xl px-3 py-2 shadow-lg z-20">
 
-              <p className="font-mono text-xs text-gray-500">Starting from</p>
+              <p className="font-mono text-xs text-gray-500">
+                {hCopy.floatingPriceCaption}
+              </p>
               <p
                 className="font-anton text-lg"
                 style={{
-                  color: '#FF0000'
+                  color: 'var(--red)'
                 }}>
 
-                Rp75.000
+                {hCopy.floatingPrice}
               </p>
             </motion.div>
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── CATEGORIES ── */}
-      <section className="py-6 px-6 border-b border-white/10">
+      {show('categories') && (
+      <section className="relative py-6 px-6 border-b border-white/10">
+        <StudioSelectBar panel="sections" label="Categories" block="categories" />
         <div className="max-w-screen-xl mx-auto">
           <div className="flex items-center gap-6 overflow-x-auto pb-2 scrollbar-hide">
             {CATEGORIES.map(({ label, icon: Icon }) =>
@@ -1361,9 +819,11 @@ export function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── FLASH SALE ── */}
-      <section className="py-8 px-6 border-b border-white/10">
+      {show('flashSale') && (
+      <section className="relative py-8 px-6 border-b border-white/10">
+        <StudioSelectBar panel="sections" label="Flash sale" block="flashSale" />
         <div className="max-w-screen-xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -1392,28 +852,36 @@ export function HomePage() {
             ref={flashScrollRef}
             className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
 
-            {FLASH_PRODUCTS.map((p) =>
+            {flashProducts.length === 0 ? (
+            <p className="font-mono text-xs text-white/50 py-4">
+              Products will appear here when they are added to the catalog.
+            </p>
+            ) : (
+            flashProducts.map((p) =>
             <FlashProductCard key={p.id} product={p} />
+            )
             )}
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── TODAYS FOR YOU ── */}
-      <section className="py-8 px-6 border-b border-white/10">
+      {show('todaysForYou') && (
+      <section className="relative py-8 px-6 border-b border-white/10">
+        <StudioSelectBar panel="sections" label="Product tabs" block="todaysForYou" />
         <div className="max-w-screen-xl mx-auto">
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <h2 className="font-anton text-2xl text-white uppercase mr-2">
               Todays For You!
             </h2>
-            {TABS.map((tab) =>
+            {categoryTabs.map((tab) =>
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className="font-mono text-xs px-4 py-1.5 rounded-full border transition-colors"
               style={{
                 backgroundColor: activeTab === tab ? '#fff' : 'transparent',
-                color: activeTab === tab ? PRIMARY : '#fff',
+                color: activeTab === tab ? 'var(--primary)' : '#fff',
                 borderColor:
                 activeTab === tab ? '#fff' : 'rgba(255,255,255,0.4)'
               }}>
@@ -1445,16 +913,24 @@ export function HomePage() {
               }}
               className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
 
-              {ALL_TAB_PRODUCTS[activeTab].map((p) =>
+              {(productsByTab[activeTab] ?? []).length === 0 ? (
+              <p className="col-span-full font-mono text-xs text-white/50 py-6 text-center">
+                No products in this category yet.
+              </p>
+              ) : (
+              (productsByTab[activeTab] ?? []).map((p) =>
               <TodayProductCard key={p.id} product={p} />
+              )
               )}
             </motion.div>
           </AnimatePresence>
         </div>
       </section>
+      )}
 
-      {/* ── BEST SELLING STORE ── */}
-      <section className="py-10 px-6 border-b border-white/10">
+      {show('bestSellingStore') && (
+      <section className="relative py-10 px-6 border-b border-white/10">
+        <StudioSelectBar panel="sections" label="Store grid" block="bestSellingStore" />
         <div className="max-w-screen-xl mx-auto">
           <h2 className="font-anton text-2xl text-white uppercase mb-6 text-center">
             Best Selling Store
@@ -1463,25 +939,30 @@ export function HomePage() {
             <div
               className="relative rounded-xl overflow-hidden flex flex-col items-center justify-end min-h-64"
               style={{
-                backgroundColor: DARK
+                backgroundColor: 'var(--dark)'
               }}>
 
               <img
-                src={HERO_IMAGE}
-                alt="GlowShop Mall"
+                src={heroImg}
+                alt="MS-GLOBAL"
                 className="absolute inset-0 w-full h-full object-cover opacity-50" />
 
               <div className="relative z-10 p-4 text-center">
-                <p className="font-anton text-2xl text-white">GlowShop Mall</p>
+                <p className="font-anton text-2xl text-white">MS-GLOBAL</p>
                 <p className="font-mono text-xs text-white/70">
-                  Shop, Glow, Delight and Experience Beauty Magic!
+                  Premium ladies oil & beauty products
                 </p>
               </div>
             </div>
             <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {STORES.map((store) =>
+              {storeShowcase.length === 0 ? (
+              <p className="col-span-full font-mono text-xs text-white/50 text-center py-6">
+                More products will appear here soon.
+              </p>
+              ) : (
+              storeShowcase.map((chunk, idx) => (
               <div
-                key={store.name}
+                key={idx}
                 className="rounded-xl p-3 border border-white/20"
                 style={{
                   backgroundColor: 'rgba(255,255,255,0.08)'
@@ -1498,15 +979,15 @@ export function HomePage() {
                     </div>
                     <div>
                       <p className="font-mono text-xs font-bold text-white">
-                        {store.name}
+                        MS-GLOBAL
                       </p>
                       <p className="font-mono text-xs text-white/50">
-                        {store.tagline}
+                        Featured picks
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {store.products.map((p, i) =>
+                    {chunk.map((p, i) =>
                   <div key={i} className="flex-1">
                         <img
                       src={p.img}
@@ -1520,19 +1001,22 @@ export function HomePage() {
                   )}
                   </div>
                 </div>
+              ))
               )}
             </div>
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── QUOTE BANNER ── */}
+      {show('quoteBanner') && (
       <section
-        className="py-16 px-6"
+        className="relative py-16 px-6"
         style={{
-          backgroundColor: DARK
+          backgroundColor: 'var(--dark)'
         }}>
 
+        <StudioSelectBar panel="home-editor" label="Quote" block="quoteBanner" />
         <div className="max-w-screen-xl mx-auto text-center">
           <motion.h2
             initial={{
@@ -1552,7 +1036,7 @@ export function HomePage() {
             }}
             className="font-anton text-4xl md:text-6xl text-white italic">
 
-            "Let's Glow Beyond Boundaries"
+            {site.home.quoteHeading}
           </motion.h2>
           <motion.div
             initial={{
@@ -1573,28 +1057,29 @@ export function HomePage() {
             className="mt-6">
 
             <Link
-              to="/join"
+              to={site.home.quoteCtaHref || '/join'}
               className="inline-block font-mono text-sm uppercase tracking-widest text-white px-10 py-4 font-bold transition-colors"
               style={{
-                backgroundColor: '#FF0000'
+                backgroundColor: 'var(--red)'
               }}>
 
-              JOIN WITH US →
+              {site.home.quoteCtaLabel}
             </Link>
           </motion.div>
         </div>
       </section>
+      )}
 
-      {/* ── CUSTOMER REVIEWS ── */}
-      <ReviewsSection />
+      {show('reviews') && <ReviewsSection />}
 
-      {/* ── FOOTER ── */}
+      {show('footer') && (
       <footer
-        className="py-12 px-6 border-t border-white/10"
+        className="relative py-12 px-6 border-t border-white/10"
         style={{
-          backgroundColor: DARK
+          backgroundColor: 'var(--dark)'
         }}>
 
+        <StudioSelectBar panel="seo" label="Footer & SEO" block="footer" />
         <div className="max-w-screen-xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
@@ -1602,17 +1087,17 @@ export function HomePage() {
                 to="/"
                 className="font-anton text-3xl text-white block mb-2">
 
-                GLOW
+                {site.footer.brandWord}
                 <span
                   style={{
-                    color: '#FF0000'
+                    color: 'var(--red)'
                   }}>
 
-                  .
+                  {site.footer.brandAccent}
                 </span>
               </Link>
               <p className="font-mono text-xs text-white/50">
-                "Let's Glow Beyond Boundaries"
+                {site.footer.tagline}
               </p>
               <div className="flex gap-3 mt-4">
                 {['F', 'T', 'Y', 'I'].map((s) =>
@@ -1667,11 +1152,12 @@ export function HomePage() {
           </div>
           <div className="border-t border-white/10 pt-6 text-center">
             <p className="font-mono text-xs text-white/30">
-              © 2001 – 2025 GLOW Beauty. All rights reserved.
+              {site.footer.copyright}
             </p>
           </div>
         </div>
       </footer>
+      )}
     </div>);
 
 }

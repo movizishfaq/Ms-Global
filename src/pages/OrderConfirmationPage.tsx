@@ -1,4 +1,4 @@
-import React, { useEffect, Fragment } from 'react';
+import React, { Fragment } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircleIcon, PackageIcon, TruckIcon, HomeIcon } from 'lucide-react';
@@ -10,6 +10,10 @@ interface OrderState {
   paymentMethod: string;
   name: string;
   email: string;
+  discountRp?: number;
+  subtotalAfterPromoRp?: number;
+  taxRp?: number;
+  shippingRp?: number;
 }
 function formatPrice(amount: number): string {
   return `Rp${amount.toLocaleString('id-ID')}`;
@@ -175,6 +179,46 @@ export function OrderConfirmationPage() {
                 {state.orderId}
               </span>
             </div>
+            {state.discountRp != null && state.discountRp > 0 &&
+            <div className="flex justify-between items-center">
+                <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+                  Promo
+                </span>
+                <span className="font-mono text-xs text-green-400">
+                  −{formatPrice(state.discountRp)}
+                </span>
+              </div>
+            }
+            {state.subtotalAfterPromoRp != null &&
+            <div className="flex justify-between items-center">
+                <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+                  Merchandise
+                </span>
+                <span className="font-mono text-xs text-white">
+                  {formatPrice(state.subtotalAfterPromoRp)}
+                </span>
+              </div>
+            }
+            {state.shippingRp != null &&
+            <div className="flex justify-between items-center">
+                <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+                  Shipping
+                </span>
+                <span className="font-mono text-xs text-white">
+                  {state.shippingRp === 0 ? 'FREE' : formatPrice(state.shippingRp)}
+                </span>
+              </div>
+            }
+            {state.taxRp != null &&
+            <div className="flex justify-between items-center">
+                <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
+                  Tax
+                </span>
+                <span className="font-mono text-xs text-white">
+                  {formatPrice(state.taxRp)}
+                </span>
+              </div>
+            }
             <div className="flex justify-between items-center">
               <span className="font-mono text-xs text-white/50 uppercase tracking-widest">
                 Total

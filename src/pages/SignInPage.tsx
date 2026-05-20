@@ -3,6 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EyeIcon, EyeOffIcon, ArrowLeftIcon } from 'lucide-react';
 import { useAuth } from '../App';
+import { authLogin, authRegister } from '../lib/api';
+import { apiUserToStored } from '../lib/authStorage';
+import {
+  clearStoredReferralCode,
+  getStoredReferralCode
+} from '../lib/referral';
 type View = 'signin' | 'signup' | 'forgot';
 const PRIMARY = '#9E055F';
 const DARK = '#7a0449';
@@ -40,13 +46,8 @@ export function SignInPage() {
             <SignInForm
               key="signin"
               onSwitch={setView}
-              onSuccess={() => {
-                signIn({
-                  name: 'Beauty Queen',
-                  email: 'user@glow.com',
-                  avatar:
-                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&q=80'
-                });
+              onSuccess={(session) => {
+                signIn(session);
                 navigate('/dashboard');
               }} />
 
@@ -55,13 +56,8 @@ export function SignInPage() {
             <SignUpForm
               key="signup"
               onSwitch={setView}
-              onSuccess={() => {
-                signIn({
-                  name: 'Beauty Queen',
-                  email: 'user@glow.com',
-                  avatar:
-                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&q=80'
-                });
+              onSuccess={(session) => {
+                signIn(session);
                 navigate('/dashboard');
               }} />
 
@@ -82,13 +78,19 @@ function SignInForm({
 
 
 
-}: {onSwitch: (v: View) => void;onSuccess: () => void;}) {
+}: {
+  onSwitch: (v: View) => void;
+  onSuccess: (session: {
+    token: string;
+    user: ReturnType<typeof apiUserToStored>;
+  }) => void;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError('ALL FIELDS REQUIRED.');
@@ -96,10 +98,18 @@ function SignInForm({
     }
     setError('');
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { token, user } = await authLogin(email.trim(), password);
+      onSuccess({ token, user: apiUserToStored(user) });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message.toUpperCase()
+          : 'SIGN IN FAILED.'
+      );
+    } finally {
       setLoading(false);
-      onSuccess();
-    }, 1200);
+    }
   };
   return (
     <motion.div
@@ -121,7 +131,7 @@ function SignInForm({
 
       <div className="text-center mb-10">
         <Link to="/" className="font-anton text-5xl text-white leading-none">
-          GLOW
+          MS-GLOBAL
           <span
             style={{
               color: '#FF0000'
@@ -247,7 +257,13 @@ function SignUpForm({
 
 
 
-}: {onSwitch: (v: View) => void;onSuccess: () => void;}) {
+}: {
+  onSwitch: (v: View) => void;
+  onSuccess: (session: {
+    token: string;
+    user: ReturnType<typeof apiUserToStored>;
+  }) => void;
+}) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -255,7 +271,7 @@ function SignUpForm({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !confirm) {
       setError('ALL FIELDS REQUIRED.');
@@ -265,16 +281,31 @@ function SignUpForm({
       setError('PASSWORDS DO NOT MATCH.');
       return;
     }
-    if (password.length < 6) {
-      setError('PASSWORD TOO SHORT (MIN 6).');
+    if (password.length < 8) {
+      setError('PASSWORD TOO SHORT (MIN 8).');
       return;
     }
     setError('');
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { token, user } = await authRegister(
+        email.trim(),
+        password,
+        name.trim(),
+        'buyer',
+        getStoredReferralCode()
+      );
+      clearStoredReferralCode();
+      onSuccess({ token, user: apiUserToStored(user) });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message.toUpperCase()
+          : 'REGISTRATION FAILED.'
+      );
+    } finally {
       setLoading(false);
-      onSuccess();
-    }, 1200);
+    }
   };
   return (
     <motion.div
@@ -296,7 +327,7 @@ function SignUpForm({
 
       <div className="text-center mb-8">
         <Link to="/" className="font-anton text-5xl text-white leading-none">
-          GLOW
+          MS-GLOBAL
           <span
             style={{
               color: '#FF0000'
@@ -370,7 +401,7 @@ function SignUpForm({
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="MIN 6 CHARACTERS"
+            placeholder="MIN 8 CHARACTERS"
             className="w-full font-mono text-sm bg-transparent text-white px-4 pb-3 pr-12 focus:outline-none placeholder:text-white/20" />
 
           <button
@@ -482,7 +513,7 @@ function ForgotForm({ onSwitch }: {onSwitch: (v: View) => void;}) {
 
       <div className="text-center mb-8">
         <Link to="/" className="font-anton text-5xl text-white leading-none">
-          GLOW
+          MS-GLOBAL
           <span
             style={{
               color: '#FF0000'

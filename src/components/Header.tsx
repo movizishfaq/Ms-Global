@@ -10,30 +10,11 @@ import {
   PackageIcon } from
 'lucide-react';
 import { useCart, useAuth } from '../App';
+import { StudioSelectBar } from './studio/StudioSelectBar';
+import { useStore } from '../context/StoreContext';
+import { useVisitorSite } from '../hooks/useVisitorSite';
 import logo from './logo.jpeg';
 const HERO_IMAGE = logo ;
-
-const navLinks = [
-{
-  label: 'HOME',
-  href: '/'
-},
-{
-  label: 'SHOP',
-  href: '/shop'
-},
-{
-  label: 'ABOUT',
-  href: '/about'
-},
-{
-  label: 'CONTACT',
-  href: '/contact'
-},
-{
-  label: 'JOIN US',
-  href: '/join'
-}];
 
 export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,29 +23,41 @@ export function Header() {
   const navigate = useNavigate();
   const { cartCount } = useCart();
   const { user, signOut } = useAuth();
+  const { announcementLine } = useStore();
+  const site = useVisitorSite();
+  const navVisible = site.nav.filter((l) => l.visible);
+  const isAdmin = location.pathname.startsWith('/admin');
+  if (isAdmin) {
+    return null;
+  }
   return (
     <>
       {/* ── Announcement Bar ── */}
-      <div className="w-full bg-black py-2 px-6 text-center">
+      <div className="relative w-full bg-black py-2 px-6 text-center">
+        <StudioSelectBar
+          panel="settings"
+          label="Top bar"
+          block="announcement"
+          anchor="above"
+        />
         <p className="font-mono text-xs text-white uppercase tracking-widest">
-          This website is made by{' '}
-          <span
-            style={{
-              color: '#FF0000'
-            }}>
-
-            Webflusion Agency
-          </span>
+          {announcementLine}
         </p>
       </div>
 
       {/* ── Main Header ── */}
       <header
-        className="sticky top-0 z-50 border-b border-white/20"
+        className="relative sticky top-0 z-50 border-b border-white/20"
         style={{
-          backgroundColor: '#9E055F'
+          backgroundColor: 'var(--primary)'
         }}>
 
+        <StudioSelectBar
+          panel="navigation"
+          label="Menus"
+          block="header-nav"
+          anchor="above"
+        />
         <div className="flex items-center justify-between px-6 py-3 max-w-screen-2xl mx-auto">
           {/* Logo: oil image + GLOW text */}
           <Link
@@ -73,18 +66,22 @@ export function Header() {
             aria-label="GLOW Home">
 
             <img
-              src={HERO_IMAGE}
+              src={
+                site.identity.logoUrl?.trim().length > 0
+                  ? site.identity.logoUrl
+                  : HERO_IMAGE
+              }
               alt="GLOW Logo"
               className="w-10 h-10 rounded-full object-cover border-2 border-white/40" />
 
             <span className="font-anton text-2xl text-white leading-none tracking-tight">
-              MS-GLOBAL
+              {site.identity.brandWord}
               <span
                 style={{
-                  color: '#FF0000'
+                  color: 'var(--red)'
                 }}>
 
-                .
+                {site.identity.brandAccent}
               </span>
             </span>
           </Link>
@@ -94,11 +91,11 @@ export function Header() {
             className="hidden md:flex items-center gap-8"
             aria-label="Main navigation">
 
-            {navLinks.map((link) => {
+            {navVisible.map((link) => {
               const isActive = location.pathname === link.href;
               return (
                 <Link
-                  key={link.href}
+                  key={link.id}
                   to={link.href}
                   className={`font-mono text-sm uppercase tracking-widest relative pb-1 transition-colors ${isActive ? 'text-white' : 'text-white/70 hover:text-white'}`}>
 
@@ -331,9 +328,9 @@ export function Header() {
           }}>
 
             <nav className="flex flex-col items-center gap-8">
-              {navLinks.map((link, i) =>
+              {navVisible.map((link, i) =>
             <motion.div
-              key={link.href}
+              key={link.id}
               initial={{
                 opacity: 0,
                 y: 40

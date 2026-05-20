@@ -1,16 +1,10 @@
-import React, { useState, lazy } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useCart } from '../App';
-interface Product {
-  id: number;
-  name: string;
-  price: string;
-  category: string;
-  image: string;
-  description?: string;
-}
+import type { CatalogProduct } from '../types/commerce';
+import { formatRp } from '../lib/money';
 interface ProductCardProps {
-  product: Product;
+  product: CatalogProduct;
 }
 const SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 export function ProductCard({ product }: ProductCardProps) {
@@ -21,7 +15,10 @@ export function ProductCard({ product }: ProductCardProps) {
     e.stopPropagation();
     const size = selectedSize || 'M';
     addToCart({
+      id: product.id,
       name: product.name,
+      price: formatRp(product.priceRp),
+      image: product.image,
       size
     });
     setIsFlipped(false);
@@ -68,7 +65,7 @@ export function ProductCard({ product }: ProductCardProps) {
               {product.name}
             </h3>
             <p className="font-mono text-sm text-black mt-0.5">
-              {product.price}
+              {formatRp(product.priceRp)}
             </p>
           </div>
           <div className="absolute top-3 left-3">
@@ -90,7 +87,9 @@ export function ProductCard({ product }: ProductCardProps) {
             <h3 className="font-anton text-2xl text-white uppercase leading-tight mb-2">
               {product.name}
             </h3>
-            <p className="font-mono text-2xl text-red mb-4">{product.price}</p>
+            <p className="font-mono text-2xl text-red mb-4">
+              {formatRp(product.priceRp)}
+            </p>
             <p className="font-mono text-xs text-white/60 leading-relaxed">
               {product.description ||
               'Premium quality streetwear. Limited run. 100% cotton. Oversized fit. Pre-washed for softness.'}

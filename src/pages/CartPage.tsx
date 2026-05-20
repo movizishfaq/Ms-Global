@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBagIcon,
@@ -9,21 +9,34 @@ import {
   ArrowRightIcon } from
 'lucide-react';
 import { useCart } from '../App';
+import { useStore } from '../context/StoreContext';
+import { computeCheckoutTotals } from '../lib/checkoutTotals';
+import { formatRp, parseRp } from '../lib/money';
 const PRIMARY = '#9E055F';
 const DARK = '#7a0449';
-function parsePrice(price: string): number {
-  // Handles 'Rp89.000', '$58', etc.
-  return parseFloat(price.replace(/[^0-9]/g, '')) || 0;
-}
-function formatPrice(amount: number): string {
-  return `Rp${amount.toLocaleString('id-ID')}`;
-}
 export function CartPage() {
   const { cartItems, removeFromCart, updateQuantity } = useCart();
-  const navigate = useNavigate();
-  const subtotal = cartItems.reduce((sum, item) => {
-    return sum + parsePrice(item.price) * item.quantity;
+  const store = useStore();
+  const subtotalBeforePromoRp = cartItems.reduce((sum, item) => {
+    return sum + parseRp(item.price) * item.quantity;
   }, 0);
+  const est = useMemo(
+    () =>
+      computeCheckoutTotals({
+        subtotalBeforePromoRp,
+        taxRatePercent: store.taxRatePercent,
+        shippingFlatRp: store.shippingFlatRp,
+        freeShippingOverRp: store.freeShippingOverRp,
+        promoPercent: store.promoPercent
+      }),
+    [
+      subtotalBeforePromoRp,
+      store.taxRatePercent,
+      store.shippingFlatRp,
+      store.freeShippingOverRp,
+      store.promoPercent
+    ]
+  );
   return (
     <div
       className="w-full min-h-screen"
@@ -190,7 +203,7 @@ export function CartPage() {
                     {/* Item Total */}
                     <div className="text-right flex-shrink-0 min-w-[80px]">
                       <p className="font-mono text-sm text-white font-bold">
-                        {formatPrice(parsePrice(item.price) * item.quantity)}
+                        {formatRp(parseRp(item.price) * item.quantity)}
                       </p>
                     </div>
 
@@ -246,23 +259,43 @@ export function CartPage() {
                       Subtotal
                     </span>
                     <span className="font-mono text-sm text-white">
-                      {formatPrice(subtotal)}
+                      {formatRp(subtotalBeforePromoRp)}
+                    </span>
+                  </div>
+                  {est.discountRp > 0 &&
+                  <div className="flex justify-between">
+                      <span className="font-mono text-sm text-white/60">
+                        Promo ({store.promoPercent}%)
+                      </span>
+                      <span className="font-mono text-sm text-green-400">
+                        −{formatRp(est.discountRp)}
+                      </span>
+                    </div>
+                  }
+                  <div className="flex justify-between">
+                    <span className="font-mono text-sm text-white/60">
+                      Est. shipping
+                    </span>
+                    <span
+                    className={`font-mono text-sm font-bold ${est.shippingRp === 0 ? 'text-green-400' : 'text-white'}`}>
+
+                      {est.shippingRp === 0 ? 'FREE' : formatRp(est.shippingRp)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-mono text-sm text-white/60">
-                      Shipping
+                      Est. tax ({store.taxRatePercent}%)
                     </span>
-                    <span className="font-mono text-sm text-green-400 font-bold">
-                      FREE
+                    <span className="font-mono text-sm text-white">
+                      {formatRp(est.taxRp)}
                     </span>
                   </div>
                   <div className="border-t border-white/10 pt-3 flex justify-between">
                     <span className="font-mono text-sm text-white font-bold">
-                      TOTAL
+                      Est. total
                     </span>
                     <span className="font-anton text-xl text-white">
-                      {formatPrice(subtotal)}
+                      {formatRp(est.totalRp)}
                     </span>
                   </div>
                 </div>
@@ -280,7 +313,8 @@ export function CartPage() {
 
                 <div className="mt-4 text-center">
                   <p className="font-mono text-xs text-white/30 uppercase tracking-widest">
-                    Secure checkout · Free shipping
+                    Secure checkout · Free shipping over{' '}
+                    {formatRp(store.freeShippingOverRp)}
                   </p>
                 </div>
               </motion.div>

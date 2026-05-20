@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { captureReferralFromUrl } from '../lib/referral';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -21,9 +22,7 @@ const STEPS = [
   title: 'Sign Up',
   description:
   'Create your free MS Global account. No investment required to get started.',
-  badge: 'Free to join',
-  image:
-  'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&q=80'
+  badge: 'Free to join'
 },
 {
   step: '02',
@@ -31,9 +30,7 @@ const STEPS = [
   title: 'Get Training',
   description:
   'Access our comprehensive training materials and learn how to sell effectively.',
-  badge: 'Free training',
-  image:
-  'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80'
+  badge: 'Free training'
 },
 {
   step: '03',
@@ -41,9 +38,7 @@ const STEPS = [
   title: 'Share Products',
   description:
   'Share MS Global products on your social media and earn commissions on every sale.',
-  badge: 'Instant visibility',
-  image:
-  'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=80'
+  badge: 'Instant visibility'
 },
 {
   step: '04',
@@ -51,9 +46,7 @@ const STEPS = [
   title: 'Earn Commission',
   description:
   'Get paid weekly. Track your earnings and profit in your personal dashboard.',
-  badge: 'Weekly payouts',
-  image:
-  'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&q=80'
+  badge: 'Weekly payouts'
 }];
 
 const BENEFITS = [
@@ -79,6 +72,10 @@ const BENEFITS = [
 }];
 
 export function JoinPage() {
+  useEffect(() => {
+    captureReferralFromUrl();
+  }, []);
+
   return (
     <div
       className="w-full"
@@ -274,17 +271,11 @@ export function JoinPage() {
                 backgroundColor: 'rgba(255,255,255,0.08)'
               }}>
 
-                <div className="relative h-48 overflow-hidden">
-                  <img
-                  src={step.image}
-                  alt={step.title}
-                  className="w-full h-full object-cover opacity-60" />
-
-                  <div
-                  className="absolute inset-0"
+                <div
+                  className="relative h-48 overflow-hidden flex items-center justify-center"
                   style={{
-                    background: `linear-gradient(to bottom, transparent 30%, ${DARK} 100%)`
-                  }} />
+                    background: `linear-gradient(135deg, ${PRIMARY} 0%, ${DARK} 100%)`
+                  }}>
 
                   <div className="absolute top-4 left-4">
                     <span className="font-anton text-6xl text-white/20">

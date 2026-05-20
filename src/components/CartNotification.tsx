@@ -1,8 +1,11 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import { useCart } from '../App';
 export function CartNotification() {
+  const { pathname } = useLocation();
   const { notification } = useCart();
+  if (pathname.startsWith('/admin')) return null;
   return (
     <AnimatePresence>
       {notification &&
